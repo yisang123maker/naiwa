@@ -235,6 +235,17 @@ function paintMeters(bump = false) {
 /* ---------------------------------------------------------------- */
 /* 载入数据                                                          */
 /* ---------------------------------------------------------------- */
+/** 后台预热大图（结算页要用），失败也无所谓 */
+function warmBigImages() {
+  for (const item of S.poses) {
+    if (item.img) continue;
+    const im = new Image();
+    im.decoding = "async";
+    im.onload = () => { item.img = im; };
+    im.src = `assets/poses/${item.pose.file}`;
+  }
+}
+
 async function loadPoses() {
   const res = await fetch("data/poses.json");
   if (!res.ok) throw new Error("姿势数据读取失败");
@@ -248,21 +259,10 @@ async function loadPoses() {
   S.ubTemplates = S.poses.filter((x) => UB_IDS.includes(x.pose.id))
     .map((x) => ({ pose: x.pose, utpl: x.utpl }));
 
-  // 图片预加载
-  await Promise.all(
-    S.poses.map(
-      (item) =>
-        new Promise((resolve) => {
-          const im = new Image();
-          im.onload = () => { item.img = im; resolve(); };
-          im.onerror = () => resolve();
-          im.src = `assets/poses/${item.pose.file}`;
-        })
-    )
-  );
-
   S.view = localStorage.getItem("frog.view") === "upper" ? "upper" : "full";
-  buildCards();
+  buildCards();          // 先用小图把卡片铺出来，别让用户等大图
+  setStatus("姿势库已就绪，正在准备摄像头…");
+  warmBigImages();       // 大图后台预热，不阻塞启动
 }
 
 /** 按模式刷新界面文案 / 胶囊 / 徽标 */
