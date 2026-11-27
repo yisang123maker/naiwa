@@ -1,0 +1,28 @@
+# Cloudflare Pages / Netlify 都认这个文件（Netlify 语法相同）
+# 目的：模型和 wasm 体积大、内容不变，让浏览器长期缓存；页面本身不缓存，改了就生效。
+
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(self)
+
+/vendor/wasm/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/models/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/assets/*
+  Cache-Control: public, max-age=604800
+
+/js/*
+  Cache-Control: public, max-age=3600
+
+/data/*
+  Cache-Control: public, max-age=600
+
+/
+  Cache-Control: no-cache
+
+/index.html
+  Cache-Control: no-cache
