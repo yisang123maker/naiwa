@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>奶蛙凹造型 · FROG POSE ARENA</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cellipse cx='32' cy='38' rx='22' ry='20' fill='%23cfe94a'/%3E%3Ccircle cx='22' cy='22' r='9' fill='%23cfe94a'/%3E%3Ccircle cx='42' cy='22' r='9' fill='%23cfe94a'/%3E%3Ccircle cx='22' cy='22' r='4' fill='%23132018'/%3E%3Ccircle cx='42' cy='22' r='4' fill='%23132018'/%3E%3C/svg%3E" />
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div class="bg-layer" aria-hidden="true">
+    <span class="orb orb-a"></span>
+    <span class="orb orb-b"></span>
+    <span class="orb orb-c"></span>
+    <span class="grid-floor"></span>
+  </div>
+  <div class="grain" aria-hidden="true"></div>
+
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">
+          <svg viewBox="0 0 64 64" width="34" height="34" aria-hidden="true">
+            <ellipse cx="32" cy="38" rx="22" ry="20" fill="#cfe94a"/>
+            <ellipse cx="32" cy="44" rx="13" ry="11" fill="#fff3c9" opacity=".85"/>
+            <circle cx="22" cy="22" r="9" fill="#cfe94a"/>
+            <circle cx="42" cy="22" r="9" fill="#cfe94a"/>
+            <circle cx="22" cy="22" r="4.2" fill="#132018"/>
+            <circle cx="42" cy="22" r="4.2" fill="#132018"/>
+            <circle cx="23.6" cy="20.6" r="1.5" fill="#fff"/>
+            <circle cx="43.6" cy="20.6" r="1.5" fill="#fff"/>
+            <path d="M24 44q8 7 16 0" stroke="#132018" stroke-width="3" fill="none" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="brand-txt">
+          <h1>奶蛙凹造型</h1>
+          <p>FROG&nbsp;POSE&nbsp;ARENA</p>
+        </div>
+      </div>
+
+      <div class="topbar-mid">
+        <div class="status-pill" id="statusPill">
+          <i class="dot"></i><span id="statusText">正在唤醒奶蛙…</span>
+        </div>
+      </div>
+
+      <div class="topbar-right">
+        <button class="chip is-on" id="btnSound" title="音效开关">🔊 <span>音效</span></button>
+        <button class="chip is-on" id="btnVoice" title="奶蛙吐槽语音">🗣 <span>吐槽</span></button>
+        <button class="chip is-on" id="btnBones" title="显示骨架">🦴 <span>骨架</span></button>
+        <button class="chip" id="btnHelp" title="玩法说明">？<span>玩法</span></button>
+      </div>
+    </header>
+
+    <main class="arena">
+      <!-- ================= LEFT : STAGE ================= -->
+      <section class="stage card">
+        <div class="stage-head">
+          <div class="stage-title">
+            <span class="live-dot" id="liveDot"></span>
+            <h2>你的舞台</h2>
+          </div>
+          <div class="stage-mode" id="stageMode">自由发挥</div>
+        </div>
+
+        <div class="cam-wrap" id="camWrap">
+        <div class="camera-shell" id="cameraShell">
+          <video id="video" autoplay playsinline muted></video>
+          <canvas id="overlay" class="overlay"></canvas>
+
+          <div class="cam-placeholder" id="camPlaceholder">
+            <div class="ph-icon">📷</div>
+            <p id="camMsg">正在请求摄像头权限…</p>
+            <button class="btn-ghost small" id="btnRetryCam">重试</button>
+          </div>
+
+          <div class="reticle" aria-hidden="true">
+            <i class="tl"></i><i class="tr"></i><i class="bl"></i><i class="br"></i>
+          </div>
+
+          <div class="hud" id="hudLive">
+            <span class="hud-label">实时锁定</span>
+            <span class="hud-name" id="hudName">—</span>
+            <span class="hud-bar"><i id="hudBar"></i></span>
+          </div>
+
+          <div class="cam-hint" id="camHint">没找到你 · 站到画面中间，让上半身和腿都进来</div>
+
+          <div class="hold-cue" id="holdCue">
+            <span class="hc-hand">🙌</span>
+            <span class="hc-text" id="holdText">保持举手 · 开始</span>
+            <span class="hc-bar"><i id="holdBar"></i></span>
+          </div>
+
+          <div class="countdown" id="countdown"></div>
+          <div class="snap-flash" id="snapFlash"></div>
+          <div class="scan-line" id="scanLine"></div>
+          <div class="fx-layer" id="fxLayer"></div>
+          <div class="freeze-badge" id="freezeBadge">定 格</div>
+        </div>
+        </div>
+
+        <div class="controls">
+          <button class="btn-primary" id="btnStart"><span id="btnStartText">开始凹造型</span><kbd>空格 / 举手</kbd></button>
+          <button class="btn-ghost" id="btnRandom">🎲 随机点名</button>
+          <button class="btn-ghost" id="btnBack">↺ 重置</button>
+        </div>
+
+        <div class="meters">
+          <div class="meter">
+            <span class="meter-k">连击</span>
+            <span class="meter-v" id="mCombo">0</span>
+            <span class="meter-sub" id="mComboSub">×1.0</span>
+          </div>
+          <div class="meter">
+            <span class="meter-k">蛙力值</span>
+            <span class="meter-v" id="mEnergy">0</span>
+            <span class="meter-sub">累计</span>
+          </div>
+          <div class="meter">
+            <span class="meter-k">最佳连击</span>
+            <span class="meter-v" id="mBest">0</span>
+            <span class="meter-sub">纪录</span>
+          </div>
+          <div class="meter">
+            <span class="meter-k">当前称号</span>
+            <span class="meter-v small" id="mTitle">菜鸟蛙</span>
+            <span class="meter-sub" id="mTitleSub">继续练</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= RIGHT : CATALOG / RESULT ================= -->
+      <section class="catalog card" id="catalog">
+        <div class="catalog-browse" id="catalogBrowse">
+          <div class="catalog-head">
+            <div>
+              <h2>奶蛙姿势库</h2>
+              <p><b id="poseCount">13</b> 个动作 · 点一下可锁定目标</p>
+            </div>
+            <button class="chip" id="btnClearLock">✕ 取消锁定</button>
+          </div>
+          <div class="pose-grid" id="poseGrid"></div>
+          <div class="catalog-foot">
+            <span>提示：看着右边的奶蛙，摆出同款姿势，越像越有排面</span>
+          </div>
+        </div>
+
+        <div class="catalog-result hidden" id="catalogResult">
+          <div class="result-inner">
+            <div class="result-kicker"><span id="resultKicker">奶蛙已经认出你的姿势</span></div>
+
+            <div class="result-stage" id="resultStage">
+              <img id="resultImg" alt="匹配到的奶蛙姿势" />
+              <canvas id="resultSkeleton" class="result-skeleton"></canvas>
+              <div class="crown" id="resultCrown">👑</div>
+              <div class="result-badge"><span id="resultIdx">#01</span></div>
+              <figure class="snap-in" id="snapInWrap">
+                <img id="snapIn" alt="你的定格照" />
+                <figcaption>你的定格</figcaption>
+              </figure>
+            </div>
+
+            <div class="result-name-row">
+              <h2 id="resultName">—</h2>
+              <div class="stars" id="resultStars"></div>
+            </div>
+            <p class="result-sub" id="resultSub">—</p>
+
+            <div class="verdict" id="resultVerdict">「—」</div>
+
+            <div class="result-stats">
+              <div><b id="rsEnergy">+0</b><span>蛙力值</span></div>
+              <div><b id="rsCombo">0</b><span>连击</span></div>
+              <div><b id="rsTitle">菜鸟蛙</b><span>称号</span></div>
+            </div>
+
+            <div class="result-actions">
+              <button class="btn-primary" id="btnAgain">再来一次<kbd>空格</kbd></button>
+              <button class="btn-ghost" id="btnReport">📸 保存战报</button>
+              <button class="btn-ghost" id="btnGallery">🖼 姿势库</button>
+            </div>
+
+            <div class="runner-ups">
+              <div class="runner-title">奶蛙觉得你还挺像…</div>
+              <div class="runner-list" id="runnerList"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span>MediaPipe&nbsp;Pose · 33&nbsp;关键点实时动作比对</span>
+      <span class="dot-sep">•</span>
+      <span>数据与摄像头画面只在本机处理</span>
+      <span class="grow"></span>
+      <span class="sig">奶蛙凹造型 v1.0</span>
+    </footer>
+  </div>
+
+  <!-- HELP MODAL -->
+  <div class="modal" id="helpModal" hidden>
+    <div class="modal-card">
+      <button class="modal-x" id="btnHelpClose">✕</button>
+      <h3>怎么玩 · 动手就行</h3>
+      <ol class="help-list">
+        <li><b>站好</b>：让上半身和腿都进画面，离镜头 1.5～2.5 米，光线足一点。</li>
+        <li><b>看右边</b>：姿势库里挑一只奶蛙，或者点「随机点名」让奶蛙随机下令。</li>
+        <li><b>开拍（举手就行）</b>：双手举过头顶保持半秒，画面中间会走一圈进度条，然后 3-2-1 定格 —— 站远了也够不着键盘。近处也可以按「开始凹造型」或空格。</li>
+        <li><b>再来一次</b>：结算页同样举手半秒，直接开下一轮。</li>
+      </ol>
+      <p class="help-note">右上角可以关掉音效和吐槽语音。分数只用来帮你挑图，开心最重要 🐸</p>
+    </div>
+  </div>
+
+  <div class="toast-wrap" id="toastWrap"></div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
