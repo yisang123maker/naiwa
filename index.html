@@ -45,6 +45,10 @@
       </div>
 
       <div class="topbar-right">
+        <div class="view-switch" id="viewSwitch">
+          <button class="vs-btn is-on" id="btnViewFull" title="需要站远一点，全身入镜">🧍 全身</button>
+          <button class="vs-btn" id="btnViewUpper" title="坐着玩，只比上半身和手势">🪑 半身</button>
+        </div>
         <button class="chip is-on" id="btnSound" title="音效开关">🔊 <span>音效</span></button>
         <button class="chip is-on" id="btnVoice" title="奶蛙吐槽语音">🗣 <span>吐槽</span></button>
         <button class="chip is-on" id="btnBones" title="显示骨架">🦴 <span>骨架</span></button>
@@ -135,14 +139,14 @@
         <div class="catalog-browse" id="catalogBrowse">
           <div class="catalog-head">
             <div>
-              <h2>奶蛙姿势库</h2>
-              <p><b id="poseCount">13</b> 个动作 · 点一下可锁定目标</p>
+              <h2 id="catalogTitle">奶蛙姿势库</h2>
+              <p><b id="poseCount">13</b> <span id="catalogSub">个动作 · 点一下可锁定目标</span></p>
             </div>
             <button class="chip" id="btnClearLock">✕ 取消锁定</button>
           </div>
           <div class="pose-grid" id="poseGrid"></div>
           <div class="catalog-foot">
-            <span>提示：看着右边的奶蛙，摆出同款姿势，越像越有排面</span>
+            <span id="catalogFootHint">提示：看着右边的奶蛙，摆出同款姿势，越像越有排面</span>
           </div>
         </div>
 
@@ -204,11 +208,13 @@
     <div class="modal-card">
       <button class="modal-x" id="btnHelpClose">✕</button>
       <h3>怎么玩 · 动手就行</h3>
+      <p class="help-note" style="margin:0 0 10px">先选模式：<b>🧍 全身</b> 要站远、全身入镜；<b>🪑 半身</b> 坐着就行，只比头和两只手。</p>
       <ol class="help-list">
-        <li><b>站好</b>：让上半身和腿都进画面，离镜头 1.5～2.5 米，光线足一点。</li>
+        <li><b>全身模式</b>：离镜头 1.5～2.5 米，上半身和腿都进画面，光线足一点。</li>
+        <li><b>半身模式</b>：坐下来，让头和两只手都在画面里就行 —— 腿脚出画完全不影响，只比「手放哪、手臂什么角度、头歪向哪」。</li>
         <li><b>看右边</b>：姿势库里挑一只奶蛙，或者点「随机点名」让奶蛙随机下令。</li>
-        <li><b>开拍（举手就行）</b>：双手举过头顶保持半秒，画面中间会走一圈进度条，然后 3-2-1 定格 —— 站远了也够不着键盘。近处也可以按「开始凹造型」或空格。</li>
-        <li><b>再来一次</b>：结算页同样举手半秒，直接开下一轮。</li>
+        <li><b>开拍</b>：全身模式双手举过头顶保持半秒即可（站远了够不着键盘）；半身模式按空格或点「开始凹造型」。倒数 3-2-1 后定格。</li>
+        <li><b>再来一次</b>：结算页点「再来一次」，或者全身模式下再举一次手。</li>
       </ol>
       <p class="help-note">右上角可以关掉音效和吐槽语音。分数只用来帮你挑图，开心最重要 🐸</p>
     </div>
