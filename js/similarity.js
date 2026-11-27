@@ -61,7 +61,7 @@ const dot = (a, b) => a.x * b.x + a.y * b.y;
  * @param {number} aspect  画面宽/高
  * @returns {{pts: Object, score: number, missing: string[]}|null}
  */
-export function extractPoints(landmarks, aspect) {
+export function extractPoints(landmarks, aspect, opts = {}) {
   if (!landmarks || landmarks.length < 29) return null;
   const pts = {};
   const missing = [];
@@ -82,7 +82,12 @@ export function extractPoints(landmarks, aspect) {
     visSum += vis;
   }
 
-  if (missing.length > 2) return null;
+  if (missing.length > 2) {
+    // 半身模式：腿脚出画不算问题，只要头肩肘手还在就行
+    if (!opts.upper) return null;
+    const ubMissing = missing.filter((k) => UB_KEYS.includes(k));
+    if (ubMissing.length > 1) return null;
+  }
 
   // 颈点 = 双肩中点
   if (pts.shL && pts.shR) pts.neck = mid(pts.shL, pts.shR);
@@ -103,9 +108,19 @@ export function extractPoints(landmarks, aspect) {
   fill("knR", "hipR", "anR", 0.5);
   if (!pts.head && pts.neck) pts.head = { x: pts.neck.x, y: pts.neck.y + 0.12, v: 0.4 };
 
-  for (const key of KEYS) if (!pts[key]) return null;
+  for (const key of KEYS) {
+    if (pts[key]) continue;
+    if (opts.upper && !UB_KEYS.includes(key)) continue;  // 半身模式不要求腿脚
+    return null;
+  }
 
-  return { pts, confidence: clamp(visSum / Math.max(1, KEYS.length - 1), 0, 1), missing };
+  let confidence = clamp(visSum / Math.max(1, KEYS.length - 1), 0, 1);
+  if (opts.upper) {
+    let s2 = 0, n2 = 0;
+    for (const k of UB_KEYS) { if (pts[k]) { s2 += pts[k].v || 0; n2++; } }
+    confidence = n2 ? clamp(s2 / n2, 0, 1) : 0;
+  }
+  return { pts, confidence, missing };
 }
 
 /* ---------------------------------------------------------------- */
@@ -282,4 +297,124 @@ export function starsOf(score) {
 /** 0..1 → 0..100 的"锁定进度"，只用于进度条与特效强度 */
 export function gauge(score) {
   return clamp((score - 0.45) / 0.5, 0, 1);
+}
+
+/* ================================================================
+   上半身模式（坐着玩）
+   ----------------------------------------------------------------
+   只比对：头、双肩、双肘、双手腕。
+   坐标系：原点 = 颈点（肩中点），x 沿肩线向右，y 垂直向上，
+          单位 = 肩宽。这样身体前后/远近/整体倾斜都不影响打分，
+          只比"手臂怎么摆、手放在哪、头歪向哪"。
+   ================================================================ */
+
+export const UB_KEYS = ["head", "neck", "shL", "shR", "elL", "elR", "wrL", "wrR"];
+
+export const UB_BONES = [
+  ["head", "neck"], ["neck", "shL"], ["neck", "shR"],
+  ["shL", "elL"], ["elL", "wrL"], ["shR", "elR"], ["elR", "wrR"],
+  ["shL", "shR"],
+];
+
+const UB_SEGS = [["shL", "elL"], ["elL", "wrL"], ["shR", "elR"], ["elR", "wrR"]];
+const UB_HANDS = [["wrL", 1.0], ["wrR", 1.0]];
+const UB_ELBOWS = [["elL", 1.0], ["elR", 1.0]];
+
+const W_UB_ARM = 0.40;   // 四段手臂方向
+const W_UB_HAND = 0.28;  // 手腕落点（手势的核心）
+const W_UB_ELBOW = 0.16; // 肘部落点（区分抱头 / 比耶 / 交臂）
+const W_UB_HEAD = 0.16;  // 头相对双肩的位置（歪头、后仰、前探）
+
+/** 肩宽为尺度的上半身坐标系 */
+export function upperFrame(pts) {
+  const sh = sub(pts.shR, pts.shL);
+  const width = len(sh) || 1e-6;
+  const right = unit(sh);
+  let up = { x: -right.y, y: right.x };
+  const origin = mid(pts.shL, pts.shR);
+  // 头在下方说明坐标系反了（倒立 / 侧躺），翻回来
+  if (dot(up, sub(pts.head, origin)) < 0) up = { x: -up.x, y: -up.y };
+  return { origin, right, up, S: width };
+}
+
+export function toUpperBody(pts) {
+  const frame = upperFrame(pts);
+  const coords = {};
+  for (const key of UB_KEYS) {
+    const v = sub(pts[key], frame.origin);
+    coords[key] = { x: dot(v, frame.right) / frame.S, y: dot(v, frame.up) / frame.S };
+  }
+  return { coords, frame };
+}
+
+export function fromUpperBody(coords, frame) {
+  const out = {};
+  for (const key of UB_KEYS) {
+    const c = coords[key];
+    out[key] = {
+      x: frame.origin.x + (frame.right.x * c.x + frame.up.x * c.y) * frame.S,
+      y: frame.origin.y + (frame.right.y * c.x + frame.up.y * c.y) * frame.S,
+    };
+  }
+  return out;
+}
+
+/** 目标姿势 human 骨架（y 向下、躯干为单位）→ 上半身模板 */
+export function prepUpper(human) {
+  const raw = {};
+  for (const key of UB_KEYS) {
+    const p = human[key];
+    raw[key] = { x: p[0], y: -p[1] };
+  }
+  const { coords } = toUpperBody(raw);
+  return { body: coords, raw };
+}
+
+function ubArmScore(u, t) {
+  let sum = 0;
+  for (const [a, b] of UB_SEGS) {
+    const c = clamp(dot(unit(sub(u[b], u[a])), unit(sub(t[b], t[a]))), -1, 1);
+    sum += Math.pow((1 + c) / 2, 1.25);
+  }
+  return sum / UB_SEGS.length;
+}
+
+function ubPointScore(u, t, keys, sigma) {
+  let sum = 0, wsum = 0;
+  for (const [key, w] of keys) {
+    const d = len(sub(u[key], t[key]));
+    sum += Math.exp(-Math.pow(d / sigma, 2)) * w;
+    wsum += w;
+  }
+  return wsum ? sum / wsum : 0;
+}
+
+/**
+ * @param {Object} userPts extractPoints() 的点集
+ * @param {Object} tpl     prepUpper() 的结果
+ */
+export function compareUpper(userPts, tpl) {
+  const { coords } = toUpperBody(userPts);
+  const arm = ubArmScore(coords, tpl.body);
+  const hand = ubPointScore(coords, tpl.body, UB_HANDS, 0.46);
+  const elbow = ubPointScore(coords, tpl.body, UB_ELBOWS, 0.58);
+  const head = ubPointScore(coords, tpl.body, [["head", 1]], 0.50);
+  const total = W_UB_ARM * arm + W_UB_HAND * hand + W_UB_ELBOW * elbow + W_UB_HEAD * head;
+  return { total, arm, hand, elbow, head };
+}
+
+export function rankUpper(userPts, templates) {
+  const out = [];
+  for (const t of templates) {
+    out.push({ pose: t.pose, ...compareUpper(userPts, t.utpl) });
+  }
+  out.sort((a, b) => b.total - a.total);
+  return out;
+}
+
+/** 上半身模式只需要这些点，腿脚缺了也能玩 */
+export function upperReady(pts) {
+  if (!pts) return { ok: false, missing: UB_KEYS.slice() };
+  const missing = UB_KEYS.filter((k) => !pts[k]);
+  return { ok: missing.length <= 1, missing };
 }
