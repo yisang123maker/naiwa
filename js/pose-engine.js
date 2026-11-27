@@ -5,6 +5,68 @@
 
 import { FilesetResolver, PoseLandmarker } from "../vendor/vision_bundle.js";
 
+const MODEL_URL = "models/pose_landmarker_full.task";
+const MODEL_CACHE = "naiwa-model-v1";
+
+/** 带进度的模型下载，并放进 Cache Storage，第二次打开直接命中缓存 */
+async function loadModelBuffer(url, onProgress) {
+  try {
+    if ("caches" in window) {
+      const c = await caches.open(MODEL_CACHE);
+      const hit = await c.match(url);
+      if (hit) {
+        const buf = await hit.arrayBuffer();
+        onProgress && onProgress(buf.byteLength, buf.byteLength, "cache");
+        return new Uint8Array(buf);
+      }
+    }
+  } catch (_) {}
+
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 90000);
+  let res;
+  try {
+    res = await fetch(url, { signal: ctrl.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+  if (!res.ok) throw new Error("模型下载失败 HTTP " + res.status);
+
+  const total = Number(res.headers.get("content-length")) || 0;
+  let loaded = 0;
+  let bytes;
+  if (res.body && res.body.getReader) {
+    const reader = res.body.getReader();
+    const chunks = [];
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      loaded += value.byteLength;
+      onProgress && onProgress(loaded, total, "net");
+    }
+    bytes = new Uint8Array(loaded);
+    let off = 0;
+    for (const c of chunks) {
+      bytes.set(c, off);
+      off += c.byteLength;
+    }
+  } else {
+    bytes = new Uint8Array(await res.arrayBuffer());
+    onProgress && onProgress(bytes.byteLength, bytes.byteLength, "net");
+  }
+
+  try {
+    if ("caches" in window) {
+      const c = await caches.open(MODEL_CACHE);
+      await c.put(url, new Response(bytes.slice().buffer, {
+        headers: { "content-type": "application/octet-stream" },
+      }));
+    }
+  } catch (_) {}
+  return bytes;
+}
+
 export class PoseEngine {
   constructor() {
     this.landmarker = null;
@@ -21,12 +83,14 @@ export class PoseEngine {
     this.delegate = "GPU";
   }
 
-  async init() {
+  async init({ onProgress } = {}) {
     const fileset = await FilesetResolver.forVisionTasks("vendor/wasm");
+    const modelBuffer = await loadModelBuffer(MODEL_URL, onProgress);
+
     const build = (delegate) =>
       PoseLandmarker.createFromOptions(fileset, {
         baseOptions: {
-          modelAssetPath: "models/pose_landmarker_full.task",
+          modelAssetBuffer: modelBuffer,
           delegate,
         },
         runningMode: "VIDEO",
