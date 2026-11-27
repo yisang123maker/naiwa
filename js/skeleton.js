@@ -78,6 +78,8 @@ export function drawSkeleton(ctx, pts, proj, opt = {}) {
     dotted = false,
     pulse = 0,
     headR = 9,
+    keys = KEYS,
+    bones = BONES,
   } = opt;
 
   ctx.save();
@@ -86,7 +88,7 @@ export function drawSkeleton(ctx, pts, proj, opt = {}) {
   ctx.lineJoin = "round";
 
   const P = {};
-  for (const k of KEYS) P[k] = proj.px(pts[k].x, pts[k].y);
+  for (const k of keys) if (pts[k]) P[k] = proj.px(pts[k].x, pts[k].y);
 
   // 外发光
   ctx.strokeStyle = glow;
@@ -95,7 +97,7 @@ export function drawSkeleton(ctx, pts, proj, opt = {}) {
   ctx.lineWidth = width * 2.35;
   if (dotted) ctx.setLineDash([1, 9]);
   ctx.beginPath();
-  for (const [a, b] of BONES) {
+  for (const [a, b] of bones) {
     if (!P[a] || !P[b]) continue;
     ctx.moveTo(P[a][0], P[a][1]);
     ctx.lineTo(P[b][0], P[b][1]);
@@ -109,7 +111,7 @@ export function drawSkeleton(ctx, pts, proj, opt = {}) {
   if (dotted) ctx.setLineDash([3, 7]);
   ctx.lineDashOffset = -pulse;
   ctx.beginPath();
-  for (const [a, b] of BONES) {
+  for (const [a, b] of bones) {
     if (!P[a] || !P[b]) continue;
     ctx.moveTo(P[a][0], P[a][1]);
     ctx.lineTo(P[b][0], P[b][1]);
@@ -119,7 +121,8 @@ export function drawSkeleton(ctx, pts, proj, opt = {}) {
   // 关节点
   if (dots > 0) {
     ctx.setLineDash([]);
-    for (const k of KEYS) {
+    for (const k of keys) {
+      if (!P[k]) continue;
       const [x, y] = P[k];
       if (k === "head") {
         ctx.beginPath();
