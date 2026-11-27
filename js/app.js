@@ -2,7 +2,8 @@
    奶蛙凹造型 · app.js
    ============================================================ */
 
-import { extractPoints, rankAll, prepTemplate, toBody, fromBody, gauge, starsOf, KEYS } from "./similarity.js";
+import { extractPoints, rankAll, rankUpper, prepTemplate, prepUpper, toBody, fromBody,
+         toUpperBody, fromUpperBody, upperReady, UB_KEYS, UB_BONES, gauge, starsOf, KEYS } from "./similarity.js";
 import { PoseEngine, openCamera } from "./pose-engine.js";
 import { Projector, drawSkeleton, drawFrogSkeleton, colorFor } from "./skeleton.js";
 import * as fx from "./fx.js";
@@ -34,6 +35,8 @@ const S = {
   photo: null,
   camReady: false,
   bonesOn: true,
+  view: "full",          // full = 全身模式 | upper = 半身模式
+  ubTemplates: [],
   lastFrameT: 0,
   tickCount: 0,
   // 举手开拍（人站远了按不到空格）
@@ -86,6 +89,27 @@ const VERDICT = {
     "这个……奶蛙说它先记下了，当作黑历史。",
     "别急，先从「抱肚大笑」开始练。",
   ],
+};
+
+/* 半身模式只比这些（坐着能比划的），顺序即卡片顺序 */
+const UB_IDS = ["p03", "p04", "p07", "p10", "p14", "p15", "p16"];
+const VIEW_TEXT = {
+  full: {
+    title: "奶蛙姿势库",
+    sub: "个动作 · 点一下可锁定目标",
+    foot: "提示：看着右边的奶蛙，摆出同款姿势，越像越有排面",
+    hintNoPose: "没找到你 · 站到画面中间，让上半身和腿都进来",
+    hintOk: "🙌 举起双手 = 开始（按空格也行）",
+    badge: "空格 / 举手",
+  },
+  upper: {
+    title: "半身姿势库 · 坐着也能玩",
+    sub: "个手势 · 只比上半身和手的位置",
+    foot: "提示：上半身模式只认头、肩、肘、手 —— 腿脚出画完全没关系",
+    hintNoPose: "没找到你 · 坐下来，让头和两只手都进画面",
+    hintOk: "按空格 或 点按钮开始（半身模式不用举手）",
+    badge: "空格 / 点按钮",
+  },
 };
 
 const QUIP = {
@@ -217,9 +241,12 @@ async function loadPoses() {
   const data = await res.json();
   S.poses = data.poses.map((p) => {
     const tpl = prepTemplate(p.human);
-    return { pose: p, tpl, img: null, thumb: null };
+    const utpl = prepUpper(p.human);
+    return { pose: p, tpl, utpl, img: null, thumb: null };
   });
   S.templates = S.poses.map((x) => ({ pose: x.pose, tpl: x.tpl }));
+  S.ubTemplates = S.poses.filter((x) => UB_IDS.includes(x.pose.id))
+    .map((x) => ({ pose: x.pose, utpl: x.utpl }));
 
   // 图片预加载
   await Promise.all(
@@ -234,14 +261,53 @@ async function loadPoses() {
     )
   );
 
+  S.view = localStorage.getItem("frog.view") === "upper" ? "upper" : "full";
   buildCards();
-  $("poseCount").textContent = S.poses.length;
+}
+
+/** 按模式刷新界面文案 / 胶囊 / 徽标 */
+function applyViewText() {
+  const T = VIEW_TEXT[S.view] || VIEW_TEXT.full;
+  const set = (id, txt) => { const el = $(id); if (el) el.textContent = txt; };
+  set("catalogTitle", T.title);
+  set("catalogSub", T.sub);
+  set("catalogFootHint", T.foot);
+  const badge = document.querySelector("#btnStart kbd");
+  if (badge) badge.textContent = T.badge;
+  $("btnViewFull")?.classList.toggle("is-on", S.view === "full");
+  $("btnViewUpper")?.classList.toggle("is-on", S.view === "upper");
+  document.body.classList.toggle("upper-mode", S.view === "upper");
+}
+
+function setView(view, silent) {
+  if (view !== "upper") view = "full";
+  if (S.view === view) { applyViewText(); return; }
+  S.view = view;
+  try { localStorage.setItem("frog.view", view); } catch (e) {}
+  // 换库时清掉不在本模式里的锁定
+  if (S.lockedId && !visiblePoses().some((x) => x.pose.id === S.lockedId)) S.lockedId = null;
+  S.rank = [];
+  S.score = 0;
+  buildCards();
+  if (!silent) {
+    fx.initAudio();
+    fx.sfx.pop();
+    fx.toast(view === "upper" ? "半身模式 · 坐着也能玩，只比上半身" : "全身模式 · 站远一点，全身入镜");
+    if (S.mode === "result") backToBrowse();
+  }
+}
+
+/** 当前模式下参与比对的姿势（顺序即编号） */
+function visiblePoses() {
+  return S.view === "upper" ? S.poses.filter((x) => UB_IDS.includes(x.pose.id)) : S.poses;
 }
 
 function buildCards() {
   const grid = $("poseGrid");
   grid.innerHTML = "";
-  S.poses.forEach((item, i) => {
+  const list = visiblePoses();
+  applyViewText();
+  list.forEach((item, i) => {
     const p = item.pose;
     const card = document.createElement("div");
     card.className = "pose-card";
@@ -264,6 +330,8 @@ function buildCards() {
     });
     grid.appendChild(card);
   });
+  $("poseCount").textContent = list.length;
+  paintLock();
 }
 
 /* ---------------------------------------------------------------- */
@@ -306,7 +374,7 @@ function paintLock() {
 function randomChallenge() {
   if (S.mode !== "live") return;
   fx.initAudio();
-  const pool = S.poses.filter((p) => p.pose.id !== S.lockedId);
+  const pool = visiblePoses().filter((p) => p.pose.id !== S.lockedId);
   const pick = pool[(Math.random() * pool.length) | 0];
   S.lockedId = pick.pose.id;
   paintLock();
@@ -448,7 +516,7 @@ async function setupEngine() {
   engine.attach($("video"));
   engine.onResult = (lm) => {
     S.lm = lm;
-    const e = lm ? extractPoints(lm, proj.aspect) : null;
+    const e = lm ? extractPoints(lm, proj.aspect, { upper: S.view === "upper" }) : null;
     S.pts = e ? e.pts : null;
     S.conf = e ? e.confidence : 0;
     S.miss = e ? e.missing.length : 99;
@@ -482,7 +550,7 @@ function loop() {
   // 每隔一小段重算排名（UI 不抖）
   if (S.pts && now - lastRankT > 90) {
     lastRankT = now;
-    S.rank = rankAll(S.pts, S.templates);
+    S.rank = S.view === "upper" ? rankUpper(S.pts, S.ubTemplates) : rankAll(S.pts, S.templates);
     S.score = S.rank[0] ? S.rank[0].total : 0;
   }
 
@@ -507,8 +575,9 @@ function drawOverlay(now) {
 
   // 锁定目标的"影子骨架"
   if (target && S.mode !== "result") {
-    const { frame } = toBody(S.pts);
-    const ghost = fromBody(target.tpl.body, frame);
+    const upper = S.view === "upper";
+    const { frame } = upper ? toUpperBody(S.pts) : toBody(S.pts);
+    const ghost = upper ? fromUpperBody(target.utpl.body, frame) : fromBody(target.tpl.body, frame);
     drawSkeleton(ctx, ghost, proj, {
       color: "rgba(214,249,122,.55)",
       glow: "rgba(214,249,122,.28)",
@@ -517,6 +586,7 @@ function drawOverlay(now) {
       dots: 0,
       dotted: true,
       pulse: (now / 26) % 10,
+      ...(upper ? { keys: UB_KEYS, bones: UB_BONES } : {}),
     });
   }
 
@@ -531,6 +601,7 @@ function drawOverlay(now) {
     width: 3.2,
     dots: 3.2,
     headR: 8.5,
+    ...(S.view === "upper" ? { keys: UB_KEYS, bones: UB_BONES } : {}),
   });
 }
 
@@ -538,16 +609,17 @@ let softHintDone = false;
 function updateHudLive() {
   const hud = $("hudLive");
   const hint = $("camHint");
+  const VT = VIEW_TEXT[S.view] || VIEW_TEXT.full;
   if (!S.pts) {
     if (hint) {
-      hint.textContent = "没找到你 · 站到画面中间，让上半身和腿都进来";
+      hint.textContent = VT.hintNoPose;
       hint.classList.toggle("show", S.mode === "live" && S.camReady && !reconnecting);
     }
     hud.classList.remove("show");
     return;
   }
   if (hint) {
-    hint.textContent = "🙌 举起双手 = 开始（按空格也行）";
+    hint.textContent = VT.hintOk;
     hint.classList.toggle("show", !softHintDone && S.mode === "live");
   }
   hud.classList.add("show");
@@ -594,6 +666,7 @@ function fireHandsFree() {
 }
 
 function updateHandsFree(now) {
+  if (S.view === "upper") { $("holdCue")?.classList.remove("show"); return; }
   const cue = $("holdCue");
   if (!cue) return;
   const playing = S.mode === "live" || S.mode === "result";
@@ -692,8 +765,11 @@ function capture() {
 
   const pts = S.pts;
   const lowConf = typeof S.conf === "number" && S.conf < 0.35;
-  const manyMiss = typeof S.miss === "number" && S.miss > 2;
-  const shaky = !pts || lowConf || manyMiss;
+  const upper = S.view === "upper";
+  // 半身模式只看头肩手，腿脚出画不算问题
+  const ub = upper && pts ? upperReady(pts) : { ok: true };
+  const manyMiss = !upper && typeof S.miss === "number" && S.miss > 2;
+  const shaky = !pts || lowConf || manyMiss || !ub.ok;
   if (shaky) {
     S.mode = "live";
     $("btnStart").disabled = false;
@@ -712,7 +788,7 @@ function capture() {
   $("freezeBadge").classList.add("show");
   $("liveDot").classList.remove("on");
 
-  const rank = rankAll(pts, S.templates);
+  const rank = upper ? rankUpper(pts, S.ubTemplates) : rankAll(pts, S.templates);
   const best = rank[0];
   const stars = starsOf(best.total);
   const gap = best.total - (rank[1] ? rank[1].total : 0);
@@ -772,7 +848,7 @@ async function showResult(res) {
   }
 
   const pose = res.best.pose;
-  const idx = S.poses.findIndex((x) => x.pose.id === pose.id) + 1;
+  const idx = visiblePoses().findIndex((x) => x.pose.id === pose.id) + 1;
   $("resultIdx").textContent = "#" + String(idx).padStart(2, "0");
   $("resultName").textContent = pose.name;
   $("resultSub").textContent = pose.desc;
@@ -920,7 +996,7 @@ async function snapshot() {
 async function saveReport() {
   if (!S.result) return;
   const pose = S.result.best.pose;
-  const idx = S.poses.findIndex((x) => x.pose.id === pose.id) + 1;
+  const idx = visiblePoses().findIndex((x) => x.pose.id === pose.id) + 1;
   fx.sfx.pop();
   await downloadReport({
     img: S.poses.find((x) => x.pose.id === pose.id)?.img,
@@ -942,6 +1018,8 @@ async function saveReport() {
 /* 事件                                                              */
 /* ---------------------------------------------------------------- */
 function bindUI() {
+  $("btnViewFull")?.addEventListener("click", () => setView("full"));
+  $("btnViewUpper")?.addEventListener("click", () => setView("upper"));
   $("btnStart").addEventListener("click", startRound);
   $("btnRandom").addEventListener("click", randomChallenge);
   $("btnBack").addEventListener("click", () => {
@@ -1033,7 +1111,9 @@ function bindUI() {
 /* 启动                                                              */
 /* ---------------------------------------------------------------- */
 // 调试句柄（本地小工具，方便我自己截图验证；不影响正常使用）
-window.__FROG__ = { S, engine, proj, capture, startRound, backToBrowse, prepTemplate, toBody, fromBody, rankAll, fx, playSettlement, rollClip };
+window.__FROG__ = { S, engine, proj, capture, startRound, backToBrowse, setView, visiblePoses,
+  prepTemplate, prepUpper, toBody, toUpperBody, fromBody, fromUpperBody, rankAll, rankUpper,
+  extractPoints, fx, playSettlement, rollClip };
 
 async function boot() {
   restore();
