@@ -3,7 +3,7 @@
    MediaPipe Tasks Vision · PoseLandmarker（离线，本地 vendor）
    ============================================================ */
 
-import { FilesetResolver, PoseLandmarker } from "../vendor/vision_bundle.mjs";
+import { FilesetResolver, PoseLandmarker } from "../vendor/vision_bundle.js";
 
 export class PoseEngine {
   constructor() {
