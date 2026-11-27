@@ -438,13 +438,11 @@ async function setupEngine() {
   await engine.init({
     onProgress: (loaded, total, phase) => {
       if (phase === "cache") { setStatus("奶蛙已经从缓存里就位 · 摆个造型吧"); return; }
-      const pct = total ? Math.min(99, Math.round((loaded / total) * 100)) : 0;
+      const denom = Math.max(total || 0, loaded || 0);
+      const pct = denom ? Math.min(99, Math.round((loaded / denom) * 100)) : 0;
       if (pct === lastPct) return;
       lastPct = pct;
-      const mb = (loaded / 1048576).toFixed(1);
-      const tot = total ? (total / 1048576).toFixed(1) + "MB" : "";
-      setStatus(`正在唤醒奶蛙 · 模型 ${mb}${tot ? "/" + tot : ""}MB (${pct}%)`);
-      if (pct >= 100) setStatus("模型到齐了，正在准备识别…");
+      setStatus(`正在唤醒奶蛙 · 模型 ${pct}%（首次约 20 秒，之后走缓存秒开）`);
     },
   });
   engine.attach($("video"));
